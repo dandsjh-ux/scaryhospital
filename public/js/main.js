@@ -1,7 +1,7 @@
 // Ward 13 — client entry: menu, networking, first-person controls, HUD & minigames.
 import * as THREE from 'three';
 import { generateLevel, moveCircle, hasLOS, inRoom, FLOOR, DOOR, EXIT, BARR, WALL } from '/shared/levelgen.js';
-import { PLAYER, NOISE, ITEMS, WEAPONS, MONSTERS, LEVELS, CELL } from '/shared/config.js';
+import { PLAYER, NOISE, ITEMS, WEAPONS, MONSTERS, LEVELS, CELL, SELF_REVIVE } from '/shared/config.js';
 import { World } from './world.js';
 import { buildAvatar, buildMonster, buildFlashlightMesh, buildWeaponMesh, glowSprite, mat } from './models.js';
 import { Sound } from './audio.js';
@@ -52,6 +52,7 @@ const S = {
   inv: {}, quest: {}, weapons: {}, equipped: null, hp: 100, down: false, hidden: null,
   remotes: new Map(), monsters: new Map(), explored: null, mapOpen: false, chatOpen: false,
   skill: null, keypad: null, hold: null, target: null, prevTasksDone: new Set(),
+  selfRevives: 0, selfHold: 0, downAt: 0,
 };
 const P = { x: 0, z: 0, y: 0, vy: 0, vx: 0, vz: 0, kx: 0, kz: 0, yaw: 0, pitch: 0, crouch: false, sprint: false, moving: false, stamina: 100, battery: 100, flash: true, noise: 0, noiseSpike: 0, noiseSpikeT: 0, energyT: 0, pillsT: 0, bob: 0, stepAcc: 0, attackCd: 0, swingT: 0, shake: 0, eye: PLAYER.eye };
 const keys = new Set();
@@ -130,7 +131,7 @@ socket.on('level', onLevel);
 socket.on('snap', onSnap);
 socket.on('toast', (d) => toast(d.text, d.kind));
 socket.on('chat', (d) => addChat(d.name, d.text));
-socket.on('inv', (d) => { S.inv = d.inv; S.quest = d.quest; S.weapons = d.weapons; S.equipped = d.equipped; S.hp = d.hp; renderInventory(); });
+socket.on('inv', (d) => { S.inv = d.inv; S.quest = d.quest; S.weapons = d.weapons; S.equipped = d.equipped; S.hp = d.hp; S.selfRevives = d.selfRevives || 0; if (d.downFor) S.downAt = performance.now() - d.downFor; renderInventory(); });
 socket.on('taken', (d) => { S.taken.add(d.id); S.world?.removePickup(d.id); if (d.by === S.me) sound.pickup(); });
 socket.on('searched', (d) => { S.searched.add(d.id); if (d.by === S.me) sound.pickup(); });
 socket.on('notes', (d) => { S.notes = d; renderObjectives(); });
@@ -145,7 +146,7 @@ socket.on('hit', (d) => {
 });
 socket.on('hidden', (d) => enterLocker(d.id));
 socket.on('pulled', (d) => { exitLocker(false); P.x = d.x; P.z = d.z; toast('It dragged you out of the locker!', 'bad'); });
-socket.on('revived', () => { S.down = false; toast('You were revived!', 'good'); });
+socket.on('revived', (d) => { S.down = false; S.selfHold = 0; flashFx('healFx', 0.8); toast(d && d.self ? 'You patched yourself up — move!' : 'You were revived!', 'good'); });
 socket.on('afx', (d) => {
   if (d.id === S.me) return;
   const r = S.remotes.get(d.id); if (!r) return;
@@ -232,7 +233,7 @@ function onSnap(d) {
     if (id === S.me) {
       S.hp = hp;
       const down = !!(fl & 4);
-      if (down && !S.down) { S.down = true; cancelMinigames(); if (S.hidden) exitLocker(true); }
+      if (down && !S.down) { S.down = true; S.downAt = performance.now(); S.selfHold = 0; cancelMinigames(); if (S.hidden) exitLocker(true); }
       else if (!down && S.down) S.down = false;
       if (!(fl & 8) && S.hidden && performance.now() - (S.hiddenAt || 0) > 800) exitLocker(true);
       continue;
@@ -618,6 +619,14 @@ function updatePlayer(dt) {
   if (S.hold) n = Math.max(n, S.hold.tg.type === 'search' ? NOISE.search : NOISE.task);
   P.noiseSpikeT -= dt; if (P.noiseSpikeT > 0) n = Math.max(n, P.noiseSpike);
   if (S.hidden || S.down) n = 0;
+  // self-revive: hold E while downed
+  if (S.down) {
+    const canSelf = S.selfRevives > 0 && performance.now() - S.downAt < SELF_REVIVE.bleedOut * 1000;
+    if (canSelf && keys.has('KeyE') && S.selfHold >= 0) {
+      S.selfHold += dt;
+      if (S.selfHold >= SELF_REVIVE.hold) { S.selfHold = -1; socket.emit('selfrevive'); setTimeout(() => { if (S.down) S.selfHold = 0; }, 1500); }
+    } else if (S.selfHold > 0) S.selfHold = 0;
+  }
   P.noise = n;
   // eye height & camera
   const eyeT = S.down ? 0.35 : S.hidden ? 1.55 : P.crouch ? PLAYER.crouchEye : PLAYER.eye;
@@ -822,6 +831,16 @@ function updateHUD(dt) {
   else pr.style.display = 'none';
   $('crosshair').classList.toggle('active', !!tg && tg.type !== 'info');
   $('downed').classList.toggle('hidden', !S.down);
+  if (S.down) {
+    const left = Math.max(0, SELF_REVIVE.bleedOut - (performance.now() - S.downAt) / 1000);
+    const canSelf = S.selfRevives > 0 && left > 0;
+    const anyAlive = [...S.remotes.values()].some((r) => !(r.fl & 4));
+    $('downTxt').innerHTML = canSelf
+      ? `Hold <kbd>E</kbd> for ${SELF_REVIVE.hold}s to patch yourself up (${S.selfRevives} left this floor) · ${Math.ceil(left)}s left${anyAlive ? ' — or wait for a teammate' : ''}`
+      : anyAlive ? 'Wait for a teammate to revive you…' : 'No self-revives left…';
+    $('selfBar').style.display = canSelf ? 'block' : 'none';
+    $('selfBar').firstElementChild.style.width = Math.max(0, Math.min(1, S.selfHold / SELF_REVIVE.hold)) * 100 + '%';
+  }
   if (touch.on) {
     if (touch.sprint && P.stamina <= 1 && P.energyT <= 0) touch.sprint = false;
     $('tSprint').classList.toggle('active', touch.sprint);
@@ -851,29 +870,121 @@ function updateHUD(dt) {
     if (S.callEnd || S.exitOpen) renderObjectives();
   }
   if (S.mapOpen) drawMap();
+  drawMinimap(dt);
   drawSkill(dt);
+}
+
+// ---------------------------------------------------------------- maps & objective markers
+const ST_ICON = { fusebox: '🔌', terminal: '🖥️', cardreader: '💳', labbench: '🧪', breaker: '⚡', xray: '🩻', generator: '⛽', keypad: '🔢' };
+const seenAt = (x, z) => { const L = S.level; const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL); return !!S.explored?.[cz * L.W + cx]; };
+
+// Everything the team still needs to do, as map markers + legend rows.
+function objectiveInfo() {
+  const L = S.level, markers = [], rows = [];
+  const exitIcon = L.def.exitStyle === 'garage' ? '🚑' : '🛗';
+  const dist = (x, z) => Math.round(Math.hypot(x - P.x, z - P.z));
+  for (const td of L.def.tasks) {
+    const tk = S.tasks.find((x) => x.id === td.id); if (!tk) continue;
+    if (td.final) {
+      const ep = L.stations.find((s) => s.kind === 'exitpanel');
+      const ready = othersDone();
+      if (S.exitOpen) {
+        const r = L.exitRoom, x = (r.x0 + r.w / 2) * CELL, z = (r.y0 + r.h / 2) * CELL;
+        markers.push({ x, z, icon: exitIcon, color: '#3fe07a', pulse: true, big: true });
+        rows.push({ icon: exitIcon, text: 'EXIT IS OPEN — get inside!', d: dist(x, z), cls: 'go' });
+      } else {
+        markers.push({ x: ep.x, z: ep.z, icon: exitIcon, color: ready ? '#ffc34d' : '#56636a', pulse: ready, big: true });
+        rows.push({ icon: exitIcon, text: !ready ? `${td.short} — locked until the other tasks are done` : S.callEnd ? `${td.short} — arriving, SURVIVE` : `${td.short} — go call it!`, d: dist(ep.x, ep.z), cls: ready ? 'go' : 'dim' });
+      }
+      continue;
+    }
+    const stations = L.stations.filter((s) => s.taskId === td.id);
+    if (tk.done) { rows.push({ icon: '✔', text: td.short, cls: 'done' }); continue; }
+    let near = Infinity, prog = '';
+    for (const st of stations) {
+      const v = tk.stations[st.id] || 0; const done = td.type === 'deliver' ? v >= td.per : v >= 1;
+      if (!done) { markers.push({ x: st.x, z: st.z, icon: ST_ICON[st.kind] || '❗', color: '#ffc34d' }); near = Math.min(near, dist(st.x, st.z)); }
+    }
+    const vals = Object.values(tk.stations);
+    if (td.type === 'deliver') prog = ` ${vals.reduce((a, b) => a + b, 0)}/${td.per * vals.length}`;
+    else if (td.type === 'skill') prog = ` ${vals.filter((v) => v).length}/${vals.length}`;
+    rows.push({ icon: ST_ICON[stations[0]?.kind] || '❗', text: td.short + prog, d: near === Infinity ? null : near });
+    const item = td.type === 'deliver' ? td.item : td.type === 'code' ? 'note' : null;
+    if (!item) continue;
+    const hidden = L.def.hiddenItems.find((h) => h.item === item);
+    if (hidden) {
+      if (!(S.quest[item] > 0)) rows.push({ icon: '🔍', text: `${ITEMS[item].name}: search ${searchName(hidden.in)}`, cls: 'sub' });
+      continue;
+    }
+    let spotted = 0, unseen = 0;
+    for (const pk of L.pickups) {
+      if (pk.item !== item || S.taken.has(pk.id)) continue;
+      if (seenAt(pk.x, pk.z)) { spotted++; markers.push({ x: pk.x, z: pk.z, icon: ITEMS[item].icon, color: '#5fd0e6', small: true }); }
+      else unseen++;
+    }
+    if (spotted || unseen) rows.push({ icon: ITEMS[item].icon, text: `${ITEMS[item].name}s: ${spotted} spotted${unseen ? `, ${unseen} not found yet` : ''}`, cls: 'sub' });
+    if (S.quest[item] > 0) rows.push({ icon: '🎒', text: `You carry ${S.quest[item]} ${ITEMS[item].name}${S.quest[item] > 1 ? 's' : ''}`, cls: 'sub' });
+  }
+  for (const r of S.remotes.values()) if (r.fl & 4) {
+    markers.push({ x: r.x, z: r.z, icon: '✚', color: '#ff4d4d', pulse: true });
+    rows.push({ icon: '✚', text: `Revive ${S.roster.get(r.id)?.name || 'teammate'}`, d: dist(r.x, r.z), cls: 'bad' });
+  }
+  return { markers, rows };
+}
+
+// Draws the floor plan into `ctx`. view = { cx, cz, scale (px per metre), w, h }.
+function drawFloor(ctx, view, markers, opts = {}) {
+  const L = S.level; const { cx, cz, scale, w, h } = view;
+  const toX = (x) => w / 2 + (x - cx) * scale, toY = (z) => h / 2 + (z - cz) * scale;
+  ctx.fillStyle = '#050a0c'; ctx.fillRect(0, 0, w, h);
+  const cs = CELL * scale;
+  const x0 = Math.max(0, Math.floor((cx - w / 2 / scale) / CELL)), x1 = Math.min(L.W - 1, Math.ceil((cx + w / 2 / scale) / CELL));
+  const y0 = Math.max(0, Math.floor((cz - h / 2 / scale) / CELL)), y1 = Math.min(L.H - 1, Math.ceil((cz + h / 2 / scale) / CELL));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const k = y * L.W + x, tt = L.grid[k];
+    if (tt === WALL) continue;
+    const seen = S.explored[k];
+    ctx.fillStyle = tt === BARR ? (seen ? '#7a5420' : '#2c2418') : tt === EXIT ? '#c43' : tt === DOOR ? (seen ? '#8fb0b6' : '#2f3d41')
+      : seen ? (L.region[k] > 0 ? '#45585e' : '#5b6e74') : (L.region[k] > 0 ? '#1b2629' : '#212d31');
+    ctx.fillRect(toX(x * CELL), toY(y * CELL), cs + 0.5, cs + 0.5);
+  }
+  const pulse = 0.5 + 0.5 * Math.sin(t * 5);
+  for (const m of markers) {
+    let mx = toX(m.x), my = toY(m.z);
+    const r = (m.big ? 11 : m.small ? 7 : 9) * (opts.iconScale || 1);
+    const off = mx < r || my < r || mx > w - r || my > h - r;
+    if (off) { if (m.small || !opts.clamp) continue; mx = Math.max(r, Math.min(w - r, mx)); my = Math.max(r, Math.min(h - r, my)); }
+    if (m.pulse) { ctx.strokeStyle = m.color; ctx.globalAlpha = 0.35 + pulse * 0.5; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mx, my, r + 3 + pulse * 4, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = off ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.6)'; ctx.strokeStyle = m.color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mx, my, r, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.font = `${Math.round(r * 1.15)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.fillText(m.icon, mx, my + 1);
+  }
+  for (const rm of S.remotes.values()) {
+    if (rm.fl & 4) continue;
+    ctx.fillStyle = '#5fd0e6'; ctx.beginPath(); ctx.arc(toX(rm.x), toY(rm.z), 4 * (opts.iconScale || 1), 0, 7); ctx.fill();
+  }
+  const px = toX(P.x), pz = toY(P.z), f = forward(), a = 9 * (opts.iconScale || 1);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(px + f.x * a, pz + f.z * a); ctx.lineTo(px - f.z * a * 0.55 - f.x * a * 0.5, pz + f.x * a * 0.55 - f.z * a * 0.5); ctx.lineTo(px + f.z * a * 0.55 - f.x * a * 0.5, pz - f.x * a * 0.55 - f.z * a * 0.5); ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 
 function drawMap() {
   const L = S.level; const c = $('mapCanvas'), x = c.getContext('2d');
-  const s = Math.floor(640 / Math.max(L.W, L.H)); const ox = (640 - L.W * s) / 2, oy = (640 - L.H * s) / 2;
-  x.fillStyle = '#050a0c'; x.fillRect(0, 0, 640, 640);
-  for (let y = 0; y < L.H; y++) for (let xx = 0; xx < L.W; xx++) {
-    const k = y * L.W + xx; if (!S.explored[k]) continue;
-    const tt = L.grid[k];
-    x.fillStyle = tt === WALL ? '#1b272b' : tt === BARR ? '#6b4a1a' : tt === EXIT ? '#c43' : tt === DOOR ? '#7a9aa0' : L.region[k] > 0 ? '#3d4d52' : '#506066';
-    x.fillRect(ox + xx * s, oy + y * s, s, s);
-  }
-  const dot = (wx, wz, col, r) => { x.fillStyle = col; x.beginPath(); x.arc(ox + (wx / CELL) * s, oy + (wz / CELL) * s, r, 0, 7); x.fill(); };
-  for (const st of L.stations) {
-    const k = Math.floor(st.iz / CELL) * L.W + Math.floor(st.ix / CELL); if (!S.explored[k]) continue;
-    const tk = taskOf(st); dot(st.x, st.z, tk?.done ? '#3fe07a' : '#ffc34d', s * 0.7);
-  }
-  for (const lk of L.lockers) { const k = Math.floor(lk.iz / CELL) * L.W + Math.floor(lk.ix / CELL); if (S.explored[k]) dot(lk.x, lk.z, '#5fa0d6', s * 0.35); }
-  for (const r of S.remotes.values()) dot(r.x, r.z, r.fl & 4 ? '#f44' : '#5fd0e6', s * 0.6);
-  const px = ox + (P.x / CELL) * s, pz = oy + (P.z / CELL) * s; const f = forward();
-  x.fillStyle = '#fff'; x.beginPath(); x.moveTo(px + f.x * s * 1.4, pz + f.z * s * 1.4); x.lineTo(px - f.z * s * 0.7, pz + f.x * s * 0.7); x.lineTo(px + f.z * s * 0.7, pz - f.x * s * 0.7); x.fill();
-  x.fillStyle = '#9ab'; x.font = '13px Rubik'; x.fillText('● task  ● locker  ● teammate', 10, 630);
+  const { markers, rows } = objectiveInfo();
+  const scale = 640 / (Math.max(L.W, L.H) * CELL);
+  drawFloor(x, { cx: (L.W * CELL) / 2, cz: (L.H * CELL) / 2, scale, w: 640, h: 640 }, markers, { iconScale: 1.1 });
+  const html = `<h3>${escapeHtml(L.def.name)} — objectives</h3>` + rows.map((r) => `<div class="lg ${r.cls || ''}"><span class="ic">${r.icon}</span><span>${escapeHtml(r.text)}</span>${r.d != null ? `<span class="d">${r.d} m</span>` : ''}</div>`).join('')
+    + `<div class="lg key"><span class="ic">▲</span><span>You</span></div><div class="lg key"><span class="ic" style="color:#5fd0e6">●</span><span>Teammate</span></div>`;
+  if ($('mapLegend').innerHTML !== html) $('mapLegend').innerHTML = html;
+}
+
+let miniT = 0;
+function drawMinimap(dt) {
+  miniT -= dt; if (miniT > 0) return; miniT = 0.08;
+  const c = $('minimap'), x = c.getContext('2d');
+  const { markers } = objectiveInfo();
+  drawFloor(x, { cx: P.x, cz: P.z, scale: 170 / 44, w: 170, h: 170 }, markers, { clamp: true, iconScale: 0.85 });
 }
 
 // ======================================================================= main loop

@@ -96,6 +96,7 @@
       <div id="timer"></div>
       <ul id="objectives"></ul>
     </div>
+    <canvas id="minimap" width="170" height="170"></canvas>
     <div id="team"></div>
     <div id="crosshair"></div>
     <div id="stealth"><span id="eyeIcon" title="Visibility">◉</span><div id="noiseBar"><div></div></div><span id="stealthTxt"></span></div>
@@ -135,9 +136,12 @@
   </div>
 
   <div id="lockerView" class="hidden"><div class="slits"></div><p>Hiding… press <kbd>E</kbd> to get out</p></div>
-  <div id="downed" class="hidden"><h2>YOU'RE DOWN</h2><p>Wait for a teammate to revive you…</p></div>
+  <div id="downed" class="hidden"><h2>YOU'RE DOWN</h2><p id="downTxt">Wait for a teammate to revive you…</p><div id="selfBar"><i></i></div></div>
 
-  <div id="mapOverlay" class="hidden"><canvas id="mapCanvas" width="640" height="640"></canvas><p class="dim">Explored areas only · <kbd>M</kbd> to close</p></div>
+  <div id="mapOverlay" class="hidden">
+    <div class="mapWrap"><canvas id="mapCanvas" width="640" height="640"></canvas><div id="mapLegend"></div></div>
+    <p class="dim small">Task stations are always marked. Items show once you've seen that area · <kbd>M</kbd> to close</p>
+  </div>
 
   <div id="skillCheck" class="hidden">
     <canvas id="skillCanvas" width="260" height="260"></canvas>

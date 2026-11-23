@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 import { generateLevel, moveCircle, hasLOS, inRoom, cellCenter, FLOOR, DOOR, EXIT } from './shared/levelgen.js';
-import { LEVELS, MONSTERS, ITEMS, WEAPONS, CELL, MAX_PLAYERS } from './shared/config.js';
+import { LEVELS, MONSTERS, ITEMS, WEAPONS, CELL, MAX_PLAYERS, SELF_REVIVE } from './shared/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -93,6 +93,7 @@ class Game {
       id: socket.id, socket, ...info,
       x: 0, z: 0, ry: 0, cr: false, sp: false, fl: false, mv: false, noise: 0,
       hp: 100, down: false, hidden: null, inv: { bandage: 1, battery: 1 }, quest: {}, weapons: {}, equipped: null,
+      selfRevives: SELF_REVIVE.perFloor, downAt: 0,
       lastAttack: 0, snapshot: null,
     };
     this.players.set(p.id, p);
@@ -121,7 +122,12 @@ class Game {
   }
 
   invSnapshot(p) { return JSON.stringify({ inv: p.inv, weapons: p.weapons, equipped: p.equipped }); }
-  sendInv(p) { p.socket.emit('inv', { inv: p.inv, quest: p.quest, weapons: p.weapons, equipped: p.equipped, hp: p.hp }); }
+  sendInv(p) {
+    p.socket.emit('inv', {
+      inv: p.inv, quest: p.quest, weapons: p.weapons, equipped: p.equipped, hp: p.hp,
+      selfRevives: p.selfRevives || 0, downFor: p.down ? Date.now() - p.downAt : 0,
+    });
+  }
   taskStatus() { return this.tasks.map((t) => ({ id: t.id, done: t.done, stations: t.stations })); }
   notesPayload() { const L = this.level; return [0, 1, 2].map((i) => (this.notes.has(i) ? L.code[i] : null)); }
 
@@ -164,7 +170,7 @@ class Game {
       this.placeAtSpawn(p, i++);
       if (retry && p.snapshot) { const s = JSON.parse(p.snapshot); p.inv = s.inv; p.weapons = s.weapons; p.equipped = s.equipped; p.hp = 100; }
       else p.hp = p.down ? 50 : Math.max(p.hp, 50);
-      p.down = false; p.hidden = null; p.quest = {}; p.noise = 0;
+      p.down = false; p.hidden = null; p.quest = {}; p.noise = 0; p.selfRevives = SELF_REVIVE.perFloor;
       p.snapshot = this.invSnapshot(p);
     }
     this.emit('level', this.levelPayload());
@@ -361,7 +367,7 @@ class Game {
       this.sendInv(p);
       return;
     }
-    p.hp = 0; p.down = true; p.hidden = null; p.noise = 0;
+    p.hp = 0; p.down = true; p.hidden = null; p.noise = 0; p.downAt = Date.now();
     if (m) { m.state = 'search'; m.searchT = 4; m.target = null; }
     for (const o of this.monsters) if (o.target === p.id) { o.target = null; o.state = 'search'; o.searchT = 3; }
     this.toastAll(`☠ ${p.name} is down! Hold E on them to revive.`, 'bad');
@@ -369,11 +375,18 @@ class Game {
     this.checkFail();
   }
 
+  // A downed player can still get up by themselves until they bleed out.
+  canSelfRevive(p, now = Date.now()) {
+    return p.down && (p.selfRevives || 0) > 0 && now - p.downAt < SELF_REVIVE.bleedOut * 1000;
+  }
+
   checkFail() {
     if (this.phase !== 'playing' || this.failAt) return;
-    const alive = [...this.players.values()].filter((p) => !p.down);
-    if (this.players.size && !alive.length) {
-      this.failAt = Date.now() + 5000;
+    const now = Date.now();
+    const list = [...this.players.values()];
+    const alive = list.filter((p) => !p.down);
+    if (list.length && !alive.length && !list.some((p) => this.canSelfRevive(p, now))) {
+      this.failAt = now + 5000;
       this.emit('fail', { li: this.li });
     }
   }
@@ -383,6 +396,7 @@ class Game {
     if (this.phase !== 'playing') return;
     const now = Date.now();
     for (const m of this.monsters) this.updateMonster(m, dt, now);
+    this.checkFail(); // catches downed players bleeding out
 
     if (this.call && !this.exitOpen) {
       if (now >= this.call.endsAt) {
@@ -654,6 +668,16 @@ class Game {
         this.sendInv(t);
         return;
       }
+      case 'selfrevive': {
+        // the client holds E for SELF_REVIVE.hold seconds; the server checks the timing
+        if (!playing || this.failAt || !this.canSelfRevive(p)) return;
+        if (Date.now() - p.downAt < SELF_REVIVE.hold * 1000 - 500) return;
+        p.selfRevives--; p.down = false; p.hp = SELF_REVIVE.hp;
+        p.socket.emit('revived', { self: true });
+        this.toastAll(`✚ ${p.name} patched themselves up`, 'good');
+        this.sendInv(p);
+        return;
+      }
       case 'chat': {
         const text = String(d.text || '').slice(0, 140).trim();
         if (text) this.emit('chat', { name: p.name, text });
@@ -690,7 +714,7 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack({ ok: true, code: game.code, id: socket.id });
   });
 
-  for (const ev of ['s', 'pickup', 'search', 'deposit', 'skill', 'code', 'call', 'use', 'equip', 'attack', 'hide', 'unhide', 'revive', 'chat', 'start']) {
+  for (const ev of ['s', 'pickup', 'search', 'deposit', 'skill', 'code', 'call', 'use', 'equip', 'attack', 'hide', 'unhide', 'revive', 'selfrevive', 'chat', 'start']) {
     socket.on(ev, (d) => {
       const game = socket.data.game; if (!game) return;
       const p = game.players.get(socket.id); if (!p) return;

@@ -9,7 +9,10 @@ You and up to 5 friends are trapped in a hospital overnight. The hospital's masc
 - **Escape**: once the tasks are done, call the elevator (or open the ambulance bay) and survive until it arrives. The noise draws every monster to you.
 - **Weapons are rare** (crowbar, fire extinguisher, tranq pistol), hidden in far-away cabinets, and they only stun.
 - **Power-ups**: bandages, medkits, batteries, energy drinks (unlimited sprint), Hush Pills (silent footsteps) and Adrenaline (auto-revive).
-- **Male / female** blocky avatars with shirt and skin colours. Downed teammates can be revived.
+- **Male / female** blocky avatars with shirt and skin colours.
+- **Getting back up**: teammates can revive you, or hold E for 8 s to patch yourself up (once per floor, within 45 s of going down).
+- **Objective map**: a minimap in the corner and a full map (M) marking every task station, the exit, downed teammates and any quest items you've already seen, with a checklist and distances.
+- **Touch controls** for tablets and phones: joystick, drag-to-look and on-screen buttons.
 
 Everything (models, textures, sounds) is generated in code, so there are no asset files to manage.
 
@@ -59,7 +62,7 @@ Notes:
 | Left click | Use weapon |
 | Q | Switch weapon |
 | 1–5 | Bandage, medkit, battery, energy drink, Hush Pills |
-| M | Map of explored areas |
+| M | Objective map |
 | T / Enter | Chat |
 
 ## Tuning
@@ -68,6 +71,7 @@ All balance numbers are in `shared/config.js`:
 
 - **Level length**: `blocksX` / `blocksY` (map size), `floorItems`, task counts, and the escape `wait` time per floor.
 - **Monsters**: speed, sight, field of view, hearing and damage per monster, plus `speedMult` per floor.
+- **Self-revive**: `SELF_REVIVE` (hold time, health, uses per floor, bleed-out window).
 - **Difficulty**: monster wake-up delay (`spawnMonsters` in `server.js`), loot weights, weapon placement, locker and barricade counts.
 
 ## Project layout

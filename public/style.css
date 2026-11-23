@@ -199,3 +199,35 @@ body.touch #team .mate { min-width: 140px; }
   body.touch #topLeft { width: 300px; transform: scale(0.85); transform-origin: top left; }
   body.touch #bars { bottom: 76px; }
 }
+
+/* ---------- minimap, objective map, self-revive ---------- */
+#minimap { position: absolute; top: 16px; right: 18px; width: 170px; height: 170px; border-radius: 12px; border: 1px solid rgba(120, 200, 220, 0.3); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); opacity: 0.92; }
+#team { top: 196px; }
+.mapWrap { display: flex; gap: 18px; align-items: stretch; max-width: 96vw; }
+#mapCanvas { width: min(78vh, 62vw); height: min(78vh, 62vw); }
+#mapLegend { width: 290px; max-height: min(78vh, 62vw); overflow: hidden; background: rgba(6, 16, 20, 0.85); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 7px; }
+#mapLegend h3 { margin: 0 0 4px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.lg { display: flex; align-items: center; gap: 8px; line-height: 1.25; }
+.lg .ic { width: 22px; text-align: center; flex: none; font-size: 16px; }
+.lg .d { margin-left: auto; color: var(--warn); font-variant-numeric: tabular-nums; font-size: 12px; flex: none; }
+.lg.sub { padding-left: 14px; font-size: 13px; color: #a9c3c9; }
+.lg.done { color: var(--good); opacity: 0.7; }
+.lg.dim { color: var(--dim); }
+.lg.go { color: var(--warn); font-weight: 600; }
+.lg.bad { color: var(--bad); font-weight: 600; }
+.lg.key { font-size: 12px; color: var(--dim); }
+.lg.key:first-of-type { margin-top: auto; }
+#downTxt { max-width: 560px; text-align: center; line-height: 1.5; background: rgba(0, 0, 0, 0.45); padding: 8px 14px; border-radius: 10px; }
+#selfBar { width: 320px; height: 12px; margin-top: 12px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.2); overflow: hidden; }
+#selfBar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #2a8, #6e9); }
+body.touch #downed { pointer-events: none; }
+body.touch .tside { top: calc(12px + env(safe-area-inset-top)); right: auto; left: 50%; transform: translateX(-50%); flex-direction: row; }
+body.touch #callBanner { top: 70px; }
+body.touch #topLeft { width: 330px; }
+body.touch #minimap { width: 140px; height: 140px; }
+body.touch #team { top: 166px; }
+@media (max-width: 900px) {
+  .mapWrap { flex-direction: column; align-items: center; }
+  #mapCanvas { width: min(60vh, 90vw); height: min(60vh, 90vw); }
+  #mapLegend { width: min(90vw, 640px); max-height: 30vh; }
+}

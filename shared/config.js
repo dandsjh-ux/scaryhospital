@@ -138,3 +138,7 @@ export const LEVELS = [
 export const LOOT_WEIGHTS = [
   ['none', 38], ['battery', 18], ['bandage', 18], ['energy', 7], ['medkit', 6], ['pills', 8], ['adrenaline', 4],
 ];
+
+// Self-revive when downed: hold E for `hold` seconds. Each player gets `perFloor`
+// uses per floor and must use it within `bleedOut` seconds of going down.
+export const SELF_REVIVE = { hold: 8, hp: 30, perFloor: 1, bleedOut: 45 };
