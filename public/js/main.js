@@ -210,7 +210,7 @@ function onLevel(d) {
   const kinds = [...new Set(d.monsters.map((m) => MONSTERS[m.kind].name))].join(', ');
   showCard(def.name.toUpperCase(), `Floor ${d.li + 1} of ${LEVELS.length} · ${def.subtitle}`,
     `<ul>${def.tasks.map((x) => `<li>${x.label}</li>`).join('')}</ul><p class="dim">On this floor: ${kinds}. They're dozing in the waiting room… for now.</p><p class="dim small">Click to lock the mouse. <kbd>M</kbd> map · <kbd>F</kbd> flashlight · <kbd>C</kbd> crouch</p>`, 6500);
-  if (!locked) $('pause').classList.remove('hidden');
+  if (!locked && !touch.on) $('pause').classList.remove('hidden');
 }
 
 function backToLobby() {
@@ -260,20 +260,81 @@ function removeRemote(id) { const r = S.remotes.get(id); if (r) { scene.remove(r
 // ======================================================================= input
 canvasEl.addEventListener('click', () => { if (S.phase === 'game' && !S.keypad) requestLock(); });
 $('pause').addEventListener('click', () => requestLock());
-function requestLock() { sound.init(); const p = canvasEl.requestPointerLock?.(); if (p && p.catch) p.catch(() => {}); }
+function requestLock() {
+  sound.init();
+  if (touch.on) { $('pause').classList.add('hidden'); return; }
+  const p = canvasEl.requestPointerLock?.(); if (p && p.catch) p.catch(() => {});
+}
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvasEl;
-  $('pause').classList.toggle('hidden', locked || S.phase !== 'game' || !!S.keypad || S.chatOpen);
+  $('pause').classList.toggle('hidden', locked || touch.on || S.phase !== 'game' || !!S.keypad || S.chatOpen);
   if (!locked) keys.clear();
 });
-document.addEventListener('mousemove', (e) => {
-  if (!locked) return;
-  const sens = 0.0022;
-  P.yaw -= e.movementX * sens; P.pitch -= e.movementY * sens;
+function applyLook(dx, dy, sens) {
+  P.yaw -= dx * sens; P.pitch -= dy * sens;
   P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch));
   if (S.hidden) { const base = S.hiddenYaw; let d = P.yaw - base; d = Math.max(-0.7, Math.min(0.7, d)); P.yaw = base + d; P.pitch = Math.max(-0.4, Math.min(0.4, P.pitch)); }
-});
+}
+document.addEventListener('mousemove', (e) => { if (locked) applyLook(e.movementX, e.movementY, 0.0022); });
 document.addEventListener('mousedown', (e) => { if (locked && e.button === 0 && S.phase === 'game') attack(); });
+
+// ---------------------------------------------------------------- touch controls
+// Left side of the screen = floating joystick, right side = drag to look,
+// on-screen buttons replay the same key codes the keyboard uses.
+const touch = { on: false, stickId: null, lookId: null, ox: 0, oy: 0, lx: 0, ly: 0, mx: 0, my: 0, mag: 0, sprint: false };
+function enableTouch() {
+  if (touch.on) return;
+  touch.on = true; document.body.classList.add('touch'); $('pause').classList.add('hidden');
+}
+if (window.matchMedia?.('(pointer: coarse)').matches) enableTouch();
+window.addEventListener('touchstart', enableTouch, { passive: true, once: true });
+{
+  const layer = $('touchLayer'), stick = $('stick'), knob = $('knob'), R = 60;
+  const resetStick = () => { touch.stickId = null; touch.mx = touch.my = touch.mag = 0; stick.classList.remove('on'); knob.style.transform = ''; };
+  layer.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault(); sound.init();
+    try { layer.setPointerCapture(e.pointerId); } catch {}
+    if (e.clientX < innerWidth * 0.45 && touch.stickId === null) {
+      touch.stickId = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY;
+      stick.style.left = e.clientX + 'px'; stick.style.top = e.clientY + 'px'; stick.classList.add('on');
+    } else if (touch.lookId === null) { touch.lookId = e.pointerId; touch.lx = e.clientX; touch.ly = e.clientY; }
+  });
+  layer.addEventListener('pointermove', (e) => {
+    if (e.pointerId === touch.stickId) {
+      let dx = e.clientX - touch.ox, dy = e.clientY - touch.oy; const d = Math.hypot(dx, dy);
+      if (d > R) { dx *= R / d; dy *= R / d; }
+      touch.mx = dx / R; touch.my = dy / R; touch.mag = Math.min(1, d / R);
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    } else if (e.pointerId === touch.lookId) {
+      applyLook(e.clientX - touch.lx, e.clientY - touch.ly, 0.0055);
+      touch.lx = e.clientX; touch.ly = e.clientY;
+    }
+  });
+  const end = (e) => {
+    if (e.pointerId === touch.stickId) { resetStick(); touch.sprint = false; $('tSprint').classList.remove('active'); }
+    if (e.pointerId === touch.lookId) touch.lookId = null;
+  };
+  layer.addEventListener('pointerup', end); layer.addEventListener('pointercancel', end);
+
+  const fire = (type, code) => document.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
+  document.querySelectorAll('#touchUI [data-key]').forEach((b) => {
+    const code = b.dataset.key; let down = false;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); sound.init(); down = true; b.classList.add('active'); fire('keydown', code); });
+    const up = () => { if (!down) return; down = false; b.classList.remove('active'); fire('keyup', code); };
+    b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
+  });
+  const tap = (id, fn) => $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); sound.init(); fn(); });
+  tap('tAttack', () => attack());
+  tap('tCrouch', () => { P.crouch = !P.crouch; });
+  tap('tSprint', () => { touch.sprint = !touch.sprint; });
+  tap('tFull', () => { const d = document; if (d.fullscreenElement) d.exitFullscreen?.(); else d.documentElement.requestFullscreen?.().catch(() => {}); });
+  $('inventory').addEventListener('pointerdown', (e) => {
+    const slot = e.target.closest('[data-item]'); if (!slot) return;
+    e.preventDefault();
+    const item = slot.dataset.item; if ((S.inv[item] || 0) > 0 && !S.down) socket.emit('use', { item });
+  });
+}
 
 document.addEventListener('keydown', (e) => {
   if (S.chatOpen) {
@@ -527,8 +588,9 @@ function updatePlayer(dt) {
     if (keys.has('KeyD') || keys.has('ArrowRight')) { ix += rt.x; iz += rt.z; }
     if (keys.has('KeyA') || keys.has('ArrowLeft')) { ix -= rt.x; iz -= rt.z; }
   }
+  if (!busy && touch.on && touch.mag > 0.18) { ix += f.x * -touch.my + rt.x * touch.mx; iz += f.z * -touch.my + rt.z * touch.mx; }
   const il = Math.hypot(ix, iz); if (il > 0) { ix /= il; iz /= il; }
-  const wantSprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  const wantSprint = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.sprint;
   P.moving = il > 0;
   if (S.hold) { ix = iz = 0; P.moving = false; }
   P.sprint = wantSprint && P.moving && !P.crouch && (P.stamina > 1 || P.energyT > 0);
@@ -739,7 +801,7 @@ function countInExit() {
 function renderInventory() {
   const slots = ['bandage', 'medkit', 'battery', 'energy', 'pills'].map((k) => {
     const n = S.inv[k] || 0; const it = ITEMS[k];
-    return `<div class="slot ${n ? '' : 'empty'}" title="${it.name}"><span class="k">${it.key}</span>${it.icon}<span class="n">${n || ''}</span></div>`;
+    return `<div class="slot ${n ? '' : 'empty'}" data-item="${k}" title="${it.name}"><span class="k">${it.key}</span>${it.icon}<span class="n">${n || ''}</span></div>`;
   });
   if (S.inv.adrenaline) slots.push(`<div class="slot" title="Adrenaline (auto-revive)">💉<span class="n">${S.inv.adrenaline}</span></div>`);
   for (const [k, n] of Object.entries(S.quest || {})) if (n > 0) slots.push(`<div class="slot quest" title="${ITEMS[k].name}">${ITEMS[k].icon}<span class="n">${n}</span></div>`);
@@ -760,6 +822,12 @@ function updateHUD(dt) {
   else pr.style.display = 'none';
   $('crosshair').classList.toggle('active', !!tg && tg.type !== 'info');
   $('downed').classList.toggle('hidden', !S.down);
+  if (touch.on) {
+    if (touch.sprint && P.stamina <= 1 && P.energyT <= 0) touch.sprint = false;
+    $('tSprint').classList.toggle('active', touch.sprint);
+    $('tCrouch').classList.toggle('active', P.crouch);
+    $('tAttack').style.opacity = S.equipped ? 1 : 0.35;
+  }
   const cb = $('callBanner');
   if (S.callEnd && !S.exitOpen) { cb.style.display = 'block'; cb.textContent = `${S.level.def.exitStyle === 'garage' ? 'BAY DOOR OPENING' : 'ELEVATOR ARRIVING'} — ${Math.max(0, Math.ceil((S.callEnd - performance.now()) / 1000))}s`; }
   else if (S.exitOpen) { cb.style.display = 'block'; cb.textContent = S.level.def.exitStyle === 'garage' ? 'BAY DOOR OPEN — GET TO THE AMBULANCE!' : 'ELEVATOR HERE — GET IN!'; }

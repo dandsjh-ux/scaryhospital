@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>Ward 13</title>
   <meta name="description" content="Ward 13 — a multiplayer first-person hospital survival horror game." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>" />
@@ -80,6 +82,7 @@
           <span><kbd>Q</kbd> switch weapon</span><span><kbd>1-5</kbd> use items</span>
           <span><kbd>M</kbd> map</span><span><kbd>T</kbd> chat</span>
         </div>
+        <p class="dim small">On a tablet: drag the left side to move, drag the right side to look, and use the on-screen buttons. Tap an item slot to use it.</p>
         <h3>Known residents</h3>
         <div id="bestiary"></div>
       </div>
@@ -109,6 +112,26 @@
     <div id="weapon"></div>
     <div id="toasts"></div>
     <div id="chat"><div id="chatLog"></div><input id="chatIn" maxlength="140" placeholder="Say something… (Enter to send)" /></div>
+
+    <!-- touch controls (tablets / phones) -->
+    <div id="touchUI">
+      <div id="touchLayer"></div>
+      <div id="stick"><div id="knob"></div></div>
+      <div class="tcluster">
+        <button class="tb tbig" data-key="KeyE">E<small>use</small></button>
+        <button class="tb" id="tAttack">✊<small>hit</small></button>
+        <button class="tb" data-key="Space">⤒<small>jump</small></button>
+        <button class="tb" id="tCrouch">⬇<small>crouch</small></button>
+        <button class="tb" id="tSprint">🏃<small>sprint</small></button>
+      </div>
+      <div class="tside">
+        <button class="tb sm" data-key="KeyF">🔦</button>
+        <button class="tb sm" data-key="KeyQ">🔁</button>
+        <button class="tb sm" data-key="KeyM">🗺️</button>
+        <button class="tb sm" data-key="KeyT">💬</button>
+        <button class="tb sm" id="tFull">⛶</button>
+      </div>
+    </div>
   </div>
 
   <div id="lockerView" class="hidden"><div class="slits"></div><p>Hiding… press <kbd>E</kbd> to get out</p></div>
