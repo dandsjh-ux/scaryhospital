@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ward 13</title>
+  <meta name="description" content="Ward 13 — a multiplayer first-person hospital survival horror game." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Rubik:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="grain"></div>
+  <div id="vignette"></div>
+  <div id="dangerFx"></div>
+  <div id="dmgFx"></div>
+  <div id="healFx"></div>
+
+  <!-- ===================== MENU ===================== -->
+  <div id="menu" class="screen">
+    <div class="menu-col left">
+      <h1 class="title">WARD <span>13</span></h1>
+      <p class="tag">Visiting hours are over. The mascots are still awake.</p>
+
+      <div class="panel" id="joinPanel">
+        <label class="field">Your name
+          <input id="nameIn" maxlength="16" placeholder="Patient name" autocomplete="off" />
+        </label>
+        <div class="field">Character
+          <div class="seg">
+            <button class="gbtn sel" data-g="male">♂ Male</button>
+            <button class="gbtn" data-g="female">♀ Female</button>
+          </div>
+        </div>
+        <div class="field">Gown / shirt
+          <div class="swatches" id="shirtSw"></div>
+        </div>
+        <div class="field">Skin
+          <div class="swatches" id="skinSw"></div>
+        </div>
+        <label class="field">Room code <span class="dim">(leave blank for quick play)</span>
+          <input id="roomIn" maxlength="6" placeholder="e.g. ABCD" autocomplete="off" />
+        </label>
+        <button id="playBtn" class="big">ENTER THE HOSPITAL</button>
+        <div id="joinErr" class="err"></div>
+      </div>
+
+      <div class="panel hidden" id="lobbyPanel">
+        <h2>Room <span id="roomCode" class="code"></span></h2>
+        <p class="dim small">Share this code — friends type it into "Room code" to join you (up to 6 players).</p>
+        <ul id="lobbyList"></ul>
+        <button id="startBtn" class="big">START THE NIGHT SHIFT</button>
+        <p id="waitHost" class="dim small">Waiting for the host to start…</p>
+      </div>
+    </div>
+
+    <div class="menu-col right">
+      <div class="panel help">
+        <h3>How to survive</h3>
+        <ul>
+          <li>Complete every <b>task</b> on a floor, then call the <b>elevator</b> and survive until it arrives.</li>
+          <li><b>Stay quiet.</b> Sprinting is loud, crouching is nearly silent. Your flashlight makes you easier to spot.</li>
+          <li><b>Hide in lockers</b> — but if they see you climb in, they'll drag you out.</li>
+          <li>Weapons are rare. Search drawers, cabinets and crates. They only <b>stun</b> the monsters.</li>
+          <li>Downed teammates can be revived — hold <kbd>E</kbd> on them.</li>
+        </ul>
+        <h3>Controls</h3>
+        <div class="keys">
+          <span><kbd>WASD</kbd> move</span><span><kbd>Mouse</kbd> look</span>
+          <span><kbd>Shift</kbd> sprint</span><span><kbd>C</kbd> crouch (toggle)</span>
+          <span><kbd>Space</kbd> jump</span><span><kbd>E</kbd> interact (hold)</span>
+          <span><kbd>F</kbd> flashlight</span><span><kbd>LMB</kbd> use weapon</span>
+          <span><kbd>Q</kbd> switch weapon</span><span><kbd>1-5</kbd> use items</span>
+          <span><kbd>M</kbd> map</span><span><kbd>T</kbd> chat</span>
+        </div>
+        <h3>Known residents</h3>
+        <div id="bestiary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <div id="topLeft">
+      <div id="lvlName"></div>
+      <div id="timer"></div>
+      <ul id="objectives"></ul>
+    </div>
+    <div id="team"></div>
+    <div id="crosshair"></div>
+    <div id="stealth"><span id="eyeIcon" title="Visibility">◉</span><div id="noiseBar"><div></div></div><span id="stealthTxt"></span></div>
+    <div id="prompt"></div>
+    <svg id="holdRing" viewBox="0 0 60 60"><circle cx="30" cy="30" r="25" class="bg" /><circle cx="30" cy="30" r="25" class="fg" id="holdArc" /></svg>
+    <div id="callBanner"></div>
+    <div id="bars">
+      <div class="bar hp"><span>HEALTH</span><div><i id="hpFill"></i></div></div>
+      <div class="bar st"><span>STAMINA</span><div><i id="stFill"></i></div></div>
+      <div class="bar bt"><span>BATTERY</span><div><i id="btFill"></i></div></div>
+      <div id="effects"></div>
+    </div>
+    <div id="inventory"></div>
+    <div id="weapon"></div>
+    <div id="toasts"></div>
+    <div id="chat"><div id="chatLog"></div><input id="chatIn" maxlength="140" placeholder="Say something… (Enter to send)" /></div>
+  </div>
+
+  <div id="lockerView" class="hidden"><div class="slits"></div><p>Hiding… press <kbd>E</kbd> to get out</p></div>
+  <div id="downed" class="hidden"><h2>YOU'RE DOWN</h2><p>Wait for a teammate to revive you…</p></div>
+
+  <div id="mapOverlay" class="hidden"><canvas id="mapCanvas" width="640" height="640"></canvas><p class="dim">Explored areas only · <kbd>M</kbd> to close</p></div>
+
+  <div id="skillCheck" class="hidden">
+    <canvas id="skillCanvas" width="260" height="260"></canvas>
+    <p id="skillTxt">Press <kbd>E</kbd> / <kbd>Space</kbd> when the needle is in the green</p>
+  </div>
+
+  <div id="keypad" class="hidden">
+    <div class="kp">
+      <div id="kpDisplay">___</div>
+      <div id="kpNotes" class="dim small"></div>
+      <div class="kpGrid"></div>
+      <button id="kpClose" class="ghost">Close (Esc)</button>
+    </div>
+  </div>
+
+  <div id="pause" class="hidden">
+    <div class="panel">
+      <h2>Paused</h2>
+      <p>Click to resume.</p>
+      <p class="dim small">The hospital doesn't pause — the monsters keep moving.</p>
+    </div>
+  </div>
+
+  <div id="card" class="hidden"><div class="cardInner"><h1 id="cardTitle"></h1><h3 id="cardSub"></h3><div id="cardBody"></div></div></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

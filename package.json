@@ -1,0 +1,19 @@
+{
+  "name": "ward-13",
+  "version": "1.0.0",
+  "description": "Ward 13 - a multiplayer first-person hospital survival horror game (three.js + socket.io)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "three": "^0.160.1"
+  }
+}
