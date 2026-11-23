@@ -70,7 +70,7 @@
           <li>Complete every <b>task</b> on a floor, then call the <b>elevator</b> and survive until it arrives.</li>
           <li><b>Stay quiet.</b> Sprinting is loud, crouching is nearly silent. Your flashlight makes you easier to spot.</li>
           <li><b>Hide in lockers</b> — but if they see you climb in, they'll drag you out.</li>
-          <li>Weapons are rare. Search drawers, cabinets and crates. They only <b>stun</b> the monsters.</li>
+          <li>You carry a <b>stick</b> — a whack dazes a monster for a couple of seconds, then it comes back angrier. Better weapons are rare: search drawers, cabinets and crates.</li>
           <li>Downed teammates can be revived — hold <kbd>E</kbd> on them.</li>
         </ul>
         <h3>Controls</h3>
@@ -78,7 +78,7 @@
           <span><kbd>WASD</kbd> move</span><span><kbd>Mouse</kbd> look</span>
           <span><kbd>Shift</kbd> sprint</span><span><kbd>C</kbd> crouch (toggle)</span>
           <span><kbd>Space</kbd> jump</span><span><kbd>E</kbd> interact (hold)</span>
-          <span><kbd>F</kbd> flashlight</span><span><kbd>LMB</kbd> use weapon</span>
+          <span><kbd>F</kbd> flashlight</span><span><kbd>LMB</kbd>/<kbd>R</kbd> attack</span>
           <span><kbd>Q</kbd> switch weapon</span><span><kbd>1-5</kbd> use items</span>
           <span><kbd>M</kbd> map</span><span><kbd>T</kbd> chat</span>
         </div>
@@ -120,7 +120,7 @@
       <div id="stick"><div id="knob"></div></div>
       <div class="tcluster">
         <button class="tb tbig" data-key="KeyE">E<small>use</small></button>
-        <button class="tb" id="tAttack">✊<small>hit</small></button>
+        <button class="tb tatk" id="tAttack"><span id="tAtkIcon">🪵</span><small>attack</small></button>
         <button class="tb" data-key="Space">⤒<small>jump</small></button>
         <button class="tb" id="tCrouch">⬇<small>crouch</small></button>
         <button class="tb" id="tSprint">🏃<small>sprint</small></button>

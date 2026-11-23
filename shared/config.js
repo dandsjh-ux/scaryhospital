@@ -48,6 +48,9 @@ export const ITEMS = {
 };
 
 export const WEAPONS = {
+  // Everyone starts with the stick: unlimited swings, but it only knocks a monster
+  // down briefly, and a monster that just got up shrugs off another stick hit for `immune` seconds.
+  stick:        { name: 'Stick',             uses: 1, unlimited: true, stun: 2.5, range: 2.2, arc: 0.7, cooldown: 1.1, immune: 4, icon: '🪵' },
   crowbar:      { name: 'Crowbar',           uses: 6, stun: 4.5, range: 2.6, arc: 0.85, cooldown: 0.7, icon: '🔧' },
   extinguisher: { name: 'Fire Extinguisher', uses: 3, stun: 6,   range: 5.5, arc: 0.55, cooldown: 1.2, icon: '🧯' },
   tranq:        { name: 'Tranq Pistol',      uses: 2, stun: 15,  range: 30,  arc: 0,    cooldown: 1.0, icon: '🔫' },

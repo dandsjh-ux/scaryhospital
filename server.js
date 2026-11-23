@@ -92,7 +92,7 @@ class Game {
     const p = {
       id: socket.id, socket, ...info,
       x: 0, z: 0, ry: 0, cr: false, sp: false, fl: false, mv: false, noise: 0,
-      hp: 100, down: false, hidden: null, inv: { bandage: 1, battery: 1 }, quest: {}, weapons: {}, equipped: null,
+      hp: 100, down: false, hidden: null, inv: { bandage: 1, battery: 1 }, quest: {}, weapons: { stick: 1 }, equipped: 'stick',
       selfRevives: SELF_REVIVE.perFloor, downAt: 0,
       lastAttack: 0, snapshot: null,
     };
@@ -148,7 +148,7 @@ class Game {
 
   startGame() {
     this.totalStart = Date.now();
-    for (const p of this.players.values()) { p.hp = 100; p.inv = { bandage: 1, battery: 1 }; p.weapons = {}; p.equipped = null; }
+    for (const p of this.players.values()) { p.hp = 100; p.inv = { bandage: 1, battery: 1 }; p.weapons = { stick: 1 }; p.equipped = 'stick'; }
     this.startLevel(0, false);
   }
 
@@ -238,7 +238,11 @@ class Game {
     }
     if (m.state === 'stunned') {
       m.stun -= dt;
-      if (m.stun <= 0) { m.state = 'patrol'; if (m.stunBy) this.investigate(m, m.stunBy.x, m.stunBy.z, 10); }
+      if (m.stun <= 0) {
+        m.state = 'patrol';
+        if (m.stunWeapon === 'stick') m.stickImmuneUntil = now + WEAPONS.stick.immune * 1000;
+        if (m.stunBy) this.investigate(m, m.stunBy.x, m.stunBy.z, 10);
+      }
       return;
     }
     m.attackCd = Math.max(0, m.attackCd - dt);
@@ -623,20 +627,26 @@ class Game {
           } else if (dist < 1.0 || (dx * fx + dz * fz) / dist > Math.cos(W.arc)) hits.push({ m, d: dist });
         }
         hits.sort((a, b) => a.d - b.d);
-        const affected = w === 'extinguisher' ? hits : hits.slice(0, 1);
+        let affected = w === 'extinguisher' ? hits : hits.slice(0, 1);
+        if (w === 'stick' && affected.length && now < (affected[0].m.stickImmuneUntil || 0)) {
+          this.toast(p, `${affected[0].m.def.name} shrugged off the stick — RUN!`, 'bad');
+          this.emit('afx', { id: p.id, w, hit: true });
+          return;
+        }
         for (const { m } of affected) {
           m.state = 'stunned'; m.stun = W.stun; m.target = null; m.path = null; m.lockerTarget = null;
-          m.stunBy = { x: p.x, z: p.z };
+          m.stunBy = { x: p.x, z: p.z }; m.stunWeapon = w;
           this.emit('mev', { id: m.id, ev: 'stun' });
         }
-        if (w !== 'crowbar' || affected.length) p.weapons[w]--;
+        const melee = w === 'crowbar' || w === 'stick';
+        if (!W.unlimited && (!melee || affected.length)) p.weapons[w]--;
         this.emit('afx', { id: p.id, w, hit: affected.length > 0 });
         if (p.weapons[w] <= 0) {
           delete p.weapons[w];
-          p.equipped = Object.keys(p.weapons)[0] || null;
+          p.equipped = Object.keys(p.weapons).find((k) => k !== 'stick') || (p.weapons.stick ? 'stick' : null);
           this.toast(p, w === 'crowbar' ? 'Your crowbar snapped!' : `Your ${W.name} is empty`, 'warn');
         }
-        if (affected.length) this.toast(p, affected.length > 1 ? `Stunned ${affected.length} monsters!` : `Stunned ${affected[0].m.def.name}!`, 'good');
+        if (affected.length) this.toast(p, affected.length > 1 ? `Stunned ${affected.length} monsters!` : w === 'stick' ? `${affected[0].m.def.name} is dazed for a moment — go!` : `Stunned ${affected[0].m.def.name}!`, 'good');
         this.sendInv(p);
         return;
       }

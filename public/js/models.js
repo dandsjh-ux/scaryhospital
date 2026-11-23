@@ -424,7 +424,12 @@ export function buildItemMesh(item) {
 
 export function buildWeaponMesh(w) {
   const g = new THREE.Group();
-  if (w === 'crowbar') { box(g, 0.035, 0.035, 0.7, mat(0xb02020, { r: 0.4, m: 0.6 }), 0, 0, -0.2); box(g, 0.03, 0.12, 0.035, mat(0xb02020, { r: 0.4, m: 0.6 }), 0, 0.05, -0.55, 0.4, 0, 0); }
+  if (w === 'stick') {
+    const bark = mat(0x6b4a2b, { r: 0.95 });
+    cyl(g, 0.022, 0.03, 0.8, bark, 0, 0, -0.25, Math.PI / 2, 0, 0, 7);
+    cyl(g, 0.01, 0.014, 0.16, bark, 0.04, 0.03, -0.42, Math.PI / 2, 0.5, 0, 5);
+    cyl(g, 0.034, 0.034, 0.12, mat(0x2b2b2b, { r: 0.9 }), 0, 0, 0.08, Math.PI / 2, 0, 0, 8); // tape grip
+  } else if (w === 'crowbar') { box(g, 0.035, 0.035, 0.7, mat(0xb02020, { r: 0.4, m: 0.6 }), 0, 0, -0.2); box(g, 0.03, 0.12, 0.035, mat(0xb02020, { r: 0.4, m: 0.6 }), 0, 0.05, -0.55, 0.4, 0, 0); }
   else if (w === 'extinguisher') { cyl(g, 0.09, 0.09, 0.42, mat(0xd42020, { r: 0.35, m: 0.3 }), 0, -0.05, -0.15); cyl(g, 0.03, 0.04, 0.08, M.dark, 0, 0.2, -0.15); box(g, 0.03, 0.03, 0.18, M.dark, 0, 0.22, -0.26); }
   else if (w === 'tranq') { box(g, 0.05, 0.08, 0.3, mat(0x2b2f33, { r: 0.4, m: 0.6 }), 0, 0, -0.2); box(g, 0.045, 0.14, 0.07, mat(0x3d2a1e, { r: 0.8 }), 0, -0.09, -0.08, -0.25, 0, 0); cyl(g, 0.018, 0.018, 0.2, M.dark, 0, 0.02, -0.4, Math.PI / 2, 0, 0); }
   return g;

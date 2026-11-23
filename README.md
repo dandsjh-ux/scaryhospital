@@ -7,7 +7,8 @@ You and up to 5 friends are trapped in a hospital overnight. The hospital's masc
 - **Stealth**: monsters see and hear you. Sprinting is loud, crouching is quiet, and your flashlight makes you easier to spot. Hide in lockers — but if a monster sees you climb in, it will drag you out.
 - **Mini tasks** on every floor: collect fuses, vials or gas cans; timing skill-checks on terminals and breakers; search drawers for keycards and files; find code notes and crack a keypad.
 - **Escape**: once the tasks are done, call the elevator (or open the ambulance bay) and survive until it arrives. The noise draws every monster to you.
-- **Weapons are rare** (crowbar, fire extinguisher, tranq pistol), hidden in far-away cabinets, and they only stun.
+- **Stick**: everyone starts with one. Unlimited swings, but a hit only dazes a monster for 2.5 s, and it shrugs off another stick hit for 4 s after getting up.
+- **Better weapons are rare** (crowbar, fire extinguisher, tranq pistol), hidden in far-away cabinets, and they only stun.
 - **Power-ups**: bandages, medkits, batteries, energy drinks (unlimited sprint), Hush Pills (silent footsteps) and Adrenaline (auto-revive).
 - **Male / female** blocky avatars with shirt and skin colours.
 - **Getting back up**: teammates can revive you, or hold E for 8 s to patch yourself up (once per floor, within 45 s of going down).
@@ -59,7 +60,7 @@ Notes:
 | Space | Jump |
 | E | Interact / hold to search, use items, revive |
 | F | Flashlight |
-| Left click | Use weapon |
+| Left click / R | Attack (on tablets: the red ATTACK button) |
 | Q | Switch weapon |
 | 1–5 | Bandage, medkit, battery, energy drink, Hush Pills |
 | M | Objective map |
@@ -70,6 +71,7 @@ Notes:
 All balance numbers are in `shared/config.js`:
 
 - **Level length**: `blocksX` / `blocksY` (map size), `floorItems`, task counts, and the escape `wait` time per floor.
+- **Weapons**: `WEAPONS` (stun time, range, cooldown, uses; the stick's `immune` window).
 - **Monsters**: speed, sight, field of view, hearing and damage per monster, plus `speedMult` per floor.
 - **Self-revive**: `SELF_REVIVE` (hold time, health, uses per floor, bleed-out window).
 - **Difficulty**: monster wake-up delay (`spawnMonsters` in `server.js`), loot weights, weapon placement, locker and barricade counts.

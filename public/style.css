@@ -231,3 +231,8 @@ body.touch #team { top: 166px; }
   #mapCanvas { width: min(60vh, 90vw); height: min(60vh, 90vw); }
   #mapLegend { width: min(90vw, 640px); max-height: 30vh; }
 }
+
+/* attack button */
+.tb.tatk { width: 78px; height: 78px; font-size: 30px; border-color: rgba(255, 90, 90, 0.75); background: rgba(60, 8, 8, 0.5); }
+.tcluster #tAttack { right: 102px; bottom: 0; }
+.tcluster #tSprint { right: 192px; bottom: 44px; }

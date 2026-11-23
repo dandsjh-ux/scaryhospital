@@ -151,7 +151,7 @@ socket.on('afx', (d) => {
   if (d.id === S.me) return;
   const r = S.remotes.get(d.id); if (!r) return;
   const s = sound.spatial(r.x, r.z, 30); if (!s) return;
-  if (d.w === 'crowbar') sound.swing(); else if (d.w === 'extinguisher') { sound.spray(); spawnSpray(r.x, 1.3, r.z, -Math.sin(r.ry), -Math.cos(r.ry)); } else sound.dart();
+  if (d.w === 'crowbar' || d.w === 'stick') sound.swing(); else if (d.w === 'extinguisher') { sound.spray(); spawnSpray(r.x, 1.3, r.z, -Math.sin(r.ry), -Math.cos(r.ry)); } else sound.dart();
   if (d.hit) sound.smack();
 });
 socket.on('mev', (d) => {
@@ -360,6 +360,7 @@ document.addEventListener('keydown', (e) => {
     case 'KeyM': S.mapOpen = !S.mapOpen; $('mapOverlay').classList.toggle('hidden', !S.mapOpen); break;
     case 'KeyT': case 'Enter': openChat(); e.preventDefault(); break;
     case 'KeyQ': cycleWeapon(); break;
+    case 'KeyR': attack(); break;
     case 'Space': if (P.y <= 0 && !S.down && !S.hidden) { P.vy = 4.3; } e.preventDefault(); break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': {
       const item = Object.keys(ITEMS).find((k) => ITEMS[k].key === e.code.slice(5));
@@ -382,7 +383,7 @@ function attack() {
   if (S.down || S.hidden || S.skill || !S.equipped || P.attackCd > 0) return;
   const W = WEAPONS[S.equipped]; P.attackCd = W.cooldown; P.swingT = 0.35;
   socket.emit('attack', { ry: P.yaw });
-  if (S.equipped === 'crowbar') sound.swing();
+  if (S.equipped === 'crowbar' || S.equipped === 'stick') sound.swing();
   else if (S.equipped === 'extinguisher') { sound.spray(); spawnSpray(P.x, P.eye - 0.3, P.z, -Math.sin(P.yaw), -Math.cos(P.yaw)); P.noiseSpike = NOISE.walk; P.noiseSpikeT = 1; }
   else { sound.dart(); }
 }
@@ -688,7 +689,7 @@ function updateViewModel(dt) {
     P.swingT = Math.max(0, P.swingT - dt);
     const sw = P.swingT > 0 ? Math.sin((1 - P.swingT / 0.35) * Math.PI) : 0;
     vmWeapon.position.set(0.3 - bx - sw * 0.25, -0.3 - by + sw * 0.1, -0.45 - sw * 0.15);
-    vmWeapon.rotation.set(-0.2 - sw * (S.equipped === 'crowbar' ? 1.4 : 0.2), 0.1 + sw * 0.6, sw * 0.3);
+    vmWeapon.rotation.set(-0.2 - sw * (S.equipped === 'crowbar' || S.equipped === 'stick' ? 1.4 : 0.2), 0.1 + sw * 0.6, sw * 0.3);
   } else vmFlash.position.set(0.26 + bx, -0.27 - by, -0.45);
 }
 
@@ -817,7 +818,8 @@ function renderInventory() {
   $('inventory').innerHTML = slots.join('');
   const w = S.equipped ? WEAPONS[S.equipped] : null;
   const others = Object.keys(S.weapons || {}).filter((k) => k !== S.equipped);
-  $('weapon').innerHTML = w ? `<b>${w.icon} ${w.name}</b>${S.weapons[S.equipped]} use${S.weapons[S.equipped] > 1 ? 's' : ''} left · <kbd>LMB</kbd>${others.length ? `<br/><span class="dim small"><kbd>Q</kbd> switch to ${others.map((o) => WEAPONS[o].name).join(', ')}</span>` : ''}` : '<span class="dim">No weapon — search cabinets & crates</span>';
+  const usesTxt = w?.unlimited ? 'Unlimited · only dazes them briefly' : w ? `${S.weapons[S.equipped]} use${S.weapons[S.equipped] > 1 ? 's' : ''} left` : '';
+  $('weapon').innerHTML = w ? `<b>${w.icon} ${w.name}</b>${usesTxt} · <kbd>LMB</kbd>/<kbd>R</kbd> attack${others.length ? `<br/><span class="dim small"><kbd>Q</kbd> switch to ${others.map((o) => WEAPONS[o].name).join(', ')}</span>` : ''}` : '<span class="dim">No weapon — search cabinets & crates</span>';
   renderObjectives();
 }
 
@@ -845,7 +847,9 @@ function updateHUD(dt) {
     if (touch.sprint && P.stamina <= 1 && P.energyT <= 0) touch.sprint = false;
     $('tSprint').classList.toggle('active', touch.sprint);
     $('tCrouch').classList.toggle('active', P.crouch);
-    $('tAttack').style.opacity = S.equipped ? 1 : 0.35;
+    $('tAttack').style.opacity = S.equipped && !S.down && !S.hidden ? (P.attackCd > 0 ? 0.55 : 1) : 0.35;
+    const ai = S.equipped ? WEAPONS[S.equipped].icon : '✊';
+    if ($('tAtkIcon').textContent !== ai) $('tAtkIcon').textContent = ai;
   }
   const cb = $('callBanner');
   if (S.callEnd && !S.exitOpen) { cb.style.display = 'block'; cb.textContent = `${S.level.def.exitStyle === 'garage' ? 'BAY DOOR OPENING' : 'ELEVATOR ARRIVING'} — ${Math.max(0, Math.ceil((S.callEnd - performance.now()) / 1000))}s`; }
